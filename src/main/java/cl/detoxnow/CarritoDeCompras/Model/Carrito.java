@@ -1,6 +1,7 @@
 package cl.detoxnow.CarritoDeCompras.Model;
 
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,10 +26,8 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-
-
-
 public class Carrito {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
@@ -36,17 +35,13 @@ public class Carrito {
     @Column(name = "id_usuario", nullable = false)
     private int idUsuario;
 
-    @OneToMany(mappedBy = "carrito", cascade = CascadeType.ALL)
-    private List<Pedido> items = new ArrayList<>();
+    @Column(nullable = false)
+    private String estado;  // ACTIVO / CERRADO
 
-    public Object map(Object object) {
-        // TODO Auto-generated method stub
-        throw new UnsupportedOperationException("Unimplemented method 'map'");
-    }
+    @Column(name = "fecha_creacion", nullable = false)
+    private LocalDateTime fechaCreacion;
 
-
-
-
-
-
+    @OneToMany(mappedBy = "carrito", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<DetalleCarrito> detalles = new ArrayList<>();
 }
+

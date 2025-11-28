@@ -1,6 +1,7 @@
 package cl.detoxnow.CarritoDeCompras.Controller;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
@@ -14,7 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import cl.detoxnow.CarritoDeCompras.Model.Carrito;
-import cl.detoxnow.CarritoDeCompras.Model.Pedido;
+import cl.detoxnow.CarritoDeCompras.Model.DetalleCarrito;
 import cl.detoxnow.CarritoDeCompras.Service.CarroService;
 
 @RestController
@@ -24,35 +25,54 @@ public class CarroController {
     @Autowired
     private CarroService carroService;
 
+    //  VER TODOS LOS CARRITOS
     @GetMapping
     public List<Carrito> verCarrito() {
         return carroService.getAllItems();
     }
 
+    //  OBTENER CARRITO POR ID
     @GetMapping("/{id}")
     public Carrito getItem(@PathVariable("id") int id) {
         return carroService.getCarritoId(id);
     }
 
+    //  AGREGAR PRODUCTO AL CARRITO
     @PostMapping("/agregar/{idUsuario}/{idProducto}/{cantidad}")
-    public Carrito addItem(@PathVariable("idUsuario") int idUsuario, @PathVariable("idProducto") int idProducto, @PathVariable("cantidad") int cantidad) {
+    public Carrito addItem(
+            @PathVariable("idUsuario") int idUsuario,
+            @PathVariable("idProducto") int idProducto,
+            @PathVariable("cantidad") int cantidad) {
+
         return carroService.agregarProducto(idUsuario, idProducto, cantidad);
     }
 
-    @PutMapping("/{idCarrito}/pedido/{idPedido}")
-    public Pedido updatePedido(@PathVariable("idCarrito") int idCarrito, @PathVariable("idPedido") int idPedido, @RequestBody Pedido item) {
-        return carroService.updateItem(idCarrito, idPedido, item);
+    //  ACTUALIZAR CANTIDAD DE UN PRODUCTO DEL CARRITO
+    //  CAMBIO: ya no es idPedido, ahora es idProducto
+@PutMapping("/{idCarrito}/producto/{idProducto}")
+public DetalleCarrito updateProducto(
+        @PathVariable("idCarrito") int idCarrito,
+        @PathVariable("idProducto") int idProducto,
+        @RequestBody Map<String, Integer> body) {
+
+    int nuevaCantidad = body.get("cantidad");
+    return carroService.actualizarCantidad(idCarrito, idProducto, nuevaCantidad);
+}
+
+    //  ELIMINAR PRODUCTO DEL CARRITO
+    //  CAMBIO: ya no es idPedido, ahora es idProducto
+    @DeleteMapping("/{idCarrito}/producto/{idProducto}")
+    public ResponseEntity<String> deleteItem(
+            @PathVariable("idCarrito") int idCarrito,
+            @PathVariable("idProducto") int idProducto) {
+
+        carroService.deleteItem(idCarrito, idProducto);
+        return ResponseEntity.ok("Producto eliminado del carrito");
     }
 
-    @DeleteMapping("/{idCarrito}/pedido/{idPedido}")
-        public ResponseEntity<String> deleteItem(@PathVariable("idCarrito") int idCarrito, @PathVariable("idPedido") int idPedido) {
-            carroService.deleteItem(idCarrito, idPedido);
-            return ResponseEntity.ok("Pedido eliminado");
-        }
-
-        @GetMapping("/{id}/total")
-            public double obtenerTotalDelCarrito(@PathVariable("id") int id) {
-             return carroService.calcularTotalCarrito(id);
-        }
-
+    //  OBTENER TOTAL DEL CARRITO
+    @GetMapping("/{id}/total")
+    public double obtenerTotalDelCarrito(@PathVariable("id") int id) {
+        return carroService.calcularTotalCarrito(id);
+    }
 }

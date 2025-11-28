@@ -12,13 +12,19 @@ import org.springframework.web.server.ResponseStatusException;
 import cl.detoxnow.CarritoDeCompras.DTO.ProductoDTO;
 import cl.detoxnow.CarritoDeCompras.DTO.UsuarioDTO;
 import cl.detoxnow.CarritoDeCompras.Model.Carrito;
-import cl.detoxnow.CarritoDeCompras.Model.Pedido;
+import cl.detoxnow.CarritoDeCompras.Model.DetalleCarrito;
 import cl.detoxnow.CarritoDeCompras.Repository.CarroRepository;
+import cl.detoxnow.CarritoDeCompras.Repository.DetalleCarritoRepository;
 
 @Service
 public class CarroService {
     @Autowired
     private CarroRepository carroRepository;
+
+    @Autowired
+    private DetalleCarritoRepository detalleRepository;
+
+
 
     
     @Autowired
@@ -32,7 +38,7 @@ public class CarroService {
         }
 
         // Buscar producto
-        ProductoDTO producto = rest.getForObject("http://localhost:8081/Api/v1/inventario/" + idProducto, ProductoDTO.class);
+        ProductoDTO producto = rest.getForObject("http://localhost:8083/Api/v1/inventario/" + idProducto, ProductoDTO.class);
         if (producto == null) {
             throw new RuntimeException("Producto no encontrado");
         }
@@ -43,93 +49,124 @@ public class CarroService {
         }
 
         // Buscar carrito existente o crear uno nuevo
-        Carrito carrito = carroRepository.findByIdUsuario(idUsuario).orElse(null);
-        if (carrito == null) {
-            carrito = new Carrito();
-            carrito.setIdUsuario(idUsuario);
+        Carrito carrito = carroRepository.findByIdUsuarioAndEstado(idUsuario, "ACTIVO").orElseGet(() -> {
+            Carrito nuevoCarrito = new Carrito();
+            nuevoCarrito.setIdUsuario(idUsuario);
+            nuevoCarrito.setEstado("ACTIVO");
+            nuevoCarrito.setFechaCreacion(java.time.LocalDateTime.now());
+            return carroRepository.save(nuevoCarrito);
+        });
+
+                Optional<DetalleCarrito> detalleExistente =
+                detalleRepository.findByCarritoIdAndIdProducto(carrito.getId(), idProducto);
+
+        if (detalleExistente.isPresent()) {
+            DetalleCarrito detalle = detalleExistente.get();
+            detalle.setCantidad(detalle.getCantidad() + cantidad);
+            detalleRepository.save(detalle);
+        }else {
+            DetalleCarrito nuevoDetalle = new DetalleCarrito();
+            nuevoDetalle.setIdProducto(idProducto);
+            nuevoDetalle.setCantidad(cantidad);
+            nuevoDetalle.setCarrito(carrito);
+            detalleRepository.save(nuevoDetalle);
         }
 
-        // Crear pedido
-        Pedido pedido = new Pedido();
-        pedido.setIdProducto(idProducto);
-        pedido.setIdUsuario(idUsuario);
-        pedido.setNombreProducto(producto.getNombreProducto());
-        pedido.setPrecioProducto(producto.getPrecio());
-        pedido.setCantidad(cantidad);
-        pedido.setCarrito(carrito);
+        // 6️⃣ Descontar stock en API Productos
+        descontarStock(idProducto, cantidad);
 
-        // Agregar al carrito
-        carrito.getItems().add(pedido);
-
-        // Guardar carrito
-        
-
-        descontarStock(idProducto, cantidad); // <-- Aquí llamas al nuevo método
-
-        return carroRepository.save(carrito);
+        return carrito;
     }
-    
+
     private void descontarStock(int idProducto, int cantidad) {
-        String url = "http://localhost:8081/Api/v1/inventario/descontar/" + idProducto + "/" + cantidad;
+        String url = "http://localhost:8083/Api/v1/inventario/descontar/" + idProducto + "/" + cantidad;
         rest.put(url, null); // Llamada PUT sin body
     }
 
-    public Optional<Carrito> getItem(int id) {
-        return carroRepository.findById(id);
-    }
-    
-    public Pedido updateItem(int idCarrito, int idPedido, Pedido itemActualizado) {
-    Carrito carrito = carroRepository.findById(idCarrito)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado con ID: " + idCarrito));
-
-    Pedido pedidoExistente = carrito.getItems().stream()
-        .filter(p -> p.getId() == idPedido)
-        .findFirst()
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado con ID: " + idPedido));
-
-    pedidoExistente.setCantidad(itemActualizado.getCantidad());
-    pedidoExistente.setNombreProducto(itemActualizado.getNombreProducto());
-    pedidoExistente.setPrecioProducto(itemActualizado.getPrecioProducto());
-    pedidoExistente.setCarrito(carrito); // ← Asegurarse de mantener la relación
-
-    carroRepository.save(carrito);
-
-    return pedidoExistente;
+    //  OBTENER CARRITO POR ID
+    public Carrito getCarritoId(int id) {
+        return carroRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Carrito no encontrado con ID " + id));
     }
 
-    public void deleteItem(int idCarrito, int idPedido) {
-        Carrito carrito = carroRepository.findById(idCarrito)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado con ID: " + idCarrito));
+    //  LISTAR TODOS LOS CARRITOS
+    public List<Carrito> getAllItems() {
+        return carroRepository.findAll();
+    }
 
-        boolean removed = carrito.getItems().removeIf(p -> p.getId() == idPedido);
-    
-        if (!removed) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Pedido no encontrado con ID: " + idPedido);
+    //  ELIMINAR PRODUCTO DEL CARRITO
+    public void deleteItem(int idCarrito, int idProducto) {
+
+        DetalleCarrito detalle = detalleRepository
+                .findByCarritoIdAndIdProducto(idCarrito, idProducto)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Producto no encontrado en el carrito"));
+
+        detalleRepository.delete(detalle);
+    }
+
+    //  CALCULAR TOTAL DEL CARRITO (consultando API productos)
+    public double calcularTotalCarrito(int idCarrito) {
+
+        Carrito carrito = getCarritoId(idCarrito);
+
+        double total = 0;
+
+        for (DetalleCarrito det : carrito.getDetalles()) {
+
+            ProductoDTO producto = rest.getForObject(
+                    "http://localhost:8083/Api/v1/inventario/" + det.getIdProducto(),
+                    ProductoDTO.class
+            );
+
+            if (producto == null) {
+                throw new RuntimeException("Producto no encontrado al calcular total");
+            }
+
+            total += producto.getPrecio() * det.getCantidad();
         }
+
+        return total;
+    }
+
+    //  CERRAR CARRITO (cuando se paga)
+    public void cerrarCarrito(int idCarrito) {
+
+        Carrito carrito = getCarritoId(idCarrito);
+        carrito.setEstado("CERRADO");
 
         carroRepository.save(carrito);
     }
 
-    // Otros métodos...
-        public List<Carrito> getAllItems(){
-        return carroRepository.findAll();
+
+public DetalleCarrito actualizarCantidad(int idCarrito, int idProducto, int nuevaCantidad) {
+
+    DetalleCarrito detalle = detalleRepository
+            .findByCarritoIdAndIdProducto(idCarrito, idProducto)
+            .orElseThrow(() -> new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Producto no encontrado en el carrito"));
+
+    // Si la cantidad es 0 o menor, se elimina
+    if (nuevaCantidad <= 0) {
+        detalleRepository.delete(detalle);
+        return null;
     }
 
-    public Carrito getCarritoId(int id) {
-    return carroRepository.findById(id)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado con ID " + id));
+    // Validar stock en microservicio productos
+    ProductoDTO producto = rest.getForObject(
+            "http://localhost:8083/Api/v1/inventario/" + idProducto,
+            ProductoDTO.class
+    );
+
+    if (producto == null) {
+        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
     }
 
-    public double calcularTotalCarrito(int idCarrito) {
-    Carrito carrito = carroRepository.findById(idCarrito)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado con ID: " + idCarrito));
+    if (producto.getCantidad() < nuevaCantidad) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stock insuficiente");
+    }
 
-    return carrito.getItems().stream()
-        .mapToDouble(p -> p.getPrecioProducto() * p.getCantidad())
-        .sum();
-}
-
-    
-}
-
-    
+    detalle.setCantidad(nuevaCantidad);
+    return detalleRepository.save(detalle);
+}}

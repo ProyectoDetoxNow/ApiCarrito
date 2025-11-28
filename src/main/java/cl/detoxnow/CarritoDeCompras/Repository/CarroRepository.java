@@ -10,6 +10,8 @@ import cl.detoxnow.CarritoDeCompras.Model.Carrito;
 @Repository
 public interface CarroRepository extends JpaRepository<Carrito, Integer> {
     Optional<Carrito> findByIdUsuario(int idUsuario);
+    Optional<Carrito> findByIdUsuarioAndEstado(int idUsuario, String estado);
+
+    
 
 }
-
