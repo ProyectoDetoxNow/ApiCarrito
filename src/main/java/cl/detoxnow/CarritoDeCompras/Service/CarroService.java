@@ -169,4 +169,6 @@ public DetalleCarrito actualizarCantidad(int idCarrito, int idProducto, int nuev
 
     detalle.setCantidad(nuevaCantidad);
     return detalleRepository.save(detalle);
-}}
+}
+
+}

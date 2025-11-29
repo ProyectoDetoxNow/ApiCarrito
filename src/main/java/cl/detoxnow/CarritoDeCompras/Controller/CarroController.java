@@ -75,4 +75,12 @@ public DetalleCarrito updateProducto(
     public double obtenerTotalDelCarrito(@PathVariable("id") int id) {
         return carroService.calcularTotalCarrito(id);
     }
+
+    @PutMapping("/cerrar/{idCarrito}")
+    public ResponseEntity<String> cerrarCarrito(@PathVariable("idCarrito") int idCarrito) {
+
+        carroService.cerrarCarrito(idCarrito);
+
+        return ResponseEntity.ok("Carrito cerrado correctamente");
+    }
 }
