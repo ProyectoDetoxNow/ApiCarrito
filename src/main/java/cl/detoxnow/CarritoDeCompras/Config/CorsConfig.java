@@ -18,8 +18,9 @@ public class CorsConfig {
                                 "https://ecomerceev2-git-draft-pensive-moore-scarletjara-projects.vercel.app",
                                 "http://localhost:3000"
                         )
-                        .allowedMethods("GET", "POST", "PUT", "DELETE")
-                        .allowedHeaders("*");
+                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
+                        .allowedHeaders("*")
+                        .allowCredentials(true);
             }
         };
     }
