@@ -38,14 +38,15 @@ public class CarroController {
     }
 
     //  AGREGAR PRODUCTO AL CARRITO
-    @PostMapping("/agregar/{idUsuario}/{idProducto}/{cantidad}")
+    @PostMapping("/agregar/{idCarrito}/{idProducto}/{cantidad}")
     public Carrito addItem(
-            @PathVariable("idUsuario") int idUsuario,
-            @PathVariable("idProducto") int idProducto,
-            @PathVariable("cantidad") int cantidad) {
+        @PathVariable("idCarrito") Integer idCarrito,
+        @PathVariable("idProducto") int idProducto,
+        @PathVariable("cantidad") int cantidad) {
 
-        return carroService.agregarProducto(idUsuario, idProducto, cantidad);
-    }
+    return carroService.agregarProducto(idCarrito, idProducto, cantidad);
+}
+    
 
     //  ACTUALIZAR CANTIDAD DE UN PRODUCTO DEL CARRITO
     //  CAMBIO: ya no es idPedido, ahora es idProducto

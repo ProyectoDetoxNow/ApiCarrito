@@ -32,9 +32,6 @@ public class Carrito {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private int id;
 
-    @Column(name = "id_usuario", nullable = false)
-    private int idUsuario;
-
     @Column(nullable = false)
     private String estado;  // ACTIVO / CERRADO
 
