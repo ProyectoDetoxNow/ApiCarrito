@@ -31,108 +31,71 @@ public class CarroService {
     @Value("${api.inventario.url}")
     private String inventarioUrl;
 
-
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------
     // AGREGAR PRODUCTO AL CARRITO
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------
     public Carrito agregarProducto(Integer idCarrito, int idProducto, int cantidad) {
 
-    // 1️⃣ Obtener producto
-    ProductoDTO producto = rest.getForObject(
-            inventarioUrl + "/" + idProducto,
-            ProductoDTO.class
-    );
+        ProductoDTO producto = rest.getForObject(inventarioUrl + "/" + idProducto, ProductoDTO.class);
 
-    if (producto == null) {
-        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
+        if (producto == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
+        }
+
+        if (producto.getCantidad() < cantidad) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stock insuficiente");
+        }
+
+        Carrito carrito;
+
+        if (idCarrito != null && idCarrito > 0) {
+            carrito = carroRepository.findById(idCarrito)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado"));
+        } else {
+            carrito = new Carrito();
+            carrito.setEstado("ACTIVO");
+            carrito.setFechaCreacion(java.time.LocalDateTime.now());
+            carrito = carroRepository.save(carrito);
+        }
+
+        Optional<DetalleCarrito> existente =
+                detalleRepository.findByCarritoIdAndIdProducto(carrito.getId(), idProducto);
+
+        if (existente.isPresent()) {
+            DetalleCarrito det = existente.get();
+            det.setCantidad(det.getCantidad() + cantidad);
+            detalleRepository.save(det);
+        } else {
+            DetalleCarrito det = new DetalleCarrito();
+            det.setIdProducto(idProducto);
+            det.setCantidad(cantidad);
+            det.setCarrito(carrito);
+            detalleRepository.save(det);
+        }
+
+        descontarStock(idProducto, cantidad);
+
+        // 🔥 Muy importante → devolver carrito completo con productos
+        return getCarritoId(carrito.getId());
     }
 
-    if (producto.getCantidad() < cantidad) {
-        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Stock insuficiente");
-    }
-
-    // 2️⃣ Buscar carrito si existe
-    Carrito carrito;
-
-    if (idCarrito != null && idCarrito > 0) {
-        carrito = carroRepository.findById(idCarrito)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
-                        "Carrito no encontrado"));
-    } else {
-        carrito = new Carrito();
-        carrito.setEstado("ACTIVO");
-        carrito.setFechaCreacion(java.time.LocalDateTime.now());
-        carrito = carroRepository.save(carrito);
-    }
-
-    // 3️⃣ Agregar o actualizar detalle
-    Optional<DetalleCarrito> existente =
-            detalleRepository.findByCarritoIdAndIdProducto(carrito.getId(), idProducto);
-
-    if (existente.isPresent()) {
-        DetalleCarrito det = existente.get();
-        det.setCantidad(det.getCantidad() + cantidad);
-        detalleRepository.save(det);
-    } else {
-        DetalleCarrito det = new DetalleCarrito();
-        det.setIdProducto(idProducto);
-        det.setCantidad(cantidad);
-        det.setCarrito(carrito);
-        detalleRepository.save(det);
-    }
-
-    descontarStock(idProducto, cantidad);
-    return carrito;
-}
-
-
-    // ------------------------------------------------------------------
-    // DESCONTAR STOCK EN API INVENTARIO
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------
+    // DESCONTAR STOCK
+    // ---------------------------------------------------------
     private void descontarStock(int idProducto, int cantidad) {
         String url = inventarioUrl + "/descontar/" + idProducto + "/" + cantidad;
         rest.put(url, null);
     }
 
-
-    // ------------------------------------------------------------------
-    // OBTENER CARRITO POR ID
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------
+    // OBTENER CARRITO COMPLETO + PRODUCTOS + TOTAL
+    // ---------------------------------------------------------
     public Carrito getCarritoId(int id) {
-        return carroRepository.findById(id)
+
+        Carrito carrito = carroRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Carrito no encontrado con ID " + id));
-    }
 
-
-    // ------------------------------------------------------------------
-    // LISTAR TODOS LOS CARRITOS
-    // ------------------------------------------------------------------
-    public List<Carrito> getAllItems() {
-        return carroRepository.findAll();
-    }
-
-
-    // ------------------------------------------------------------------
-    // ELIMINAR PRODUCTO DEL CARRITO
-    // ------------------------------------------------------------------
-    public void deleteItem(int idCarrito, int idProducto) {
-
-        DetalleCarrito detalle = detalleRepository
-                .findByCarritoIdAndIdProducto(idCarrito, idProducto)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Producto no encontrado en el carrito"));
-
-        detalleRepository.delete(detalle);
-    }
-
-
-    // ------------------------------------------------------------------
-    // CALCULAR TOTAL DEL CARRITO
-    // ------------------------------------------------------------------
-    public double calcularTotalCarrito(int idCarrito) {
-
-        Carrito carrito = getCarritoId(idCarrito);
         double total = 0;
 
         for (DetalleCarrito det : carrito.getDetalles()) {
@@ -142,46 +105,68 @@ public class CarroService {
                     ProductoDTO.class
             );
 
-            if (producto == null) {
-                throw new RuntimeException("Producto no encontrado");
+            if (producto != null) {
+                det.setProducto(producto);
+                total += producto.getPrecio() * det.getCantidad();
             }
-
-            total += producto.getPrecio() * det.getCantidad();
         }
 
-        return total;
+        carrito.setTotal(total);
+        return carrito;
     }
 
+    // ---------------------------------------------------------
+    // LISTAR
+    // ---------------------------------------------------------
+    public List<Carrito> getAllItems() {
+        return carroRepository.findAll();
+    }
 
-    // ------------------------------------------------------------------
-    // CERRAR CARRITO (PAGAR)
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------
+    // ELIMINAR PRODUCTO DEL CARRITO
+    // ---------------------------------------------------------
+    public void deleteItem(int idCarrito, int idProducto) {
+
+        DetalleCarrito detalle = detalleRepository
+                .findByCarritoIdAndIdProducto(idCarrito, idProducto)
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado en carrito"));
+
+        detalleRepository.delete(detalle);
+    }
+
+    // ---------------------------------------------------------
+    // CALCULAR TOTAL
+    // ---------------------------------------------------------
+    public double calcularTotalCarrito(int idCarrito) {
+        return getCarritoId(idCarrito).getTotal();
+    }
+
+    // ---------------------------------------------------------
+    // CERRAR CARRITO
+    // ---------------------------------------------------------
     public void cerrarCarrito(int idCarrito) {
         Carrito carrito = getCarritoId(idCarrito);
         carrito.setEstado("CERRADO");
         carroRepository.save(carrito);
     }
 
-
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------
     // ACTUALIZAR CANTIDAD
-    // ------------------------------------------------------------------
+    // ---------------------------------------------------------
     public DetalleCarrito actualizarCantidad(int idCarrito, int idProducto, int nuevaCantidad) {
 
         DetalleCarrito detalle = detalleRepository
                 .findByCarritoIdAndIdProducto(idCarrito, idProducto)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Producto no encontrado en el carrito"));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado en carrito"));
 
         if (nuevaCantidad <= 0) {
             detalleRepository.delete(detalle);
             return null;
         }
 
-        ProductoDTO producto = rest.getForObject(
-                inventarioUrl + "/" + idProducto,
-                ProductoDTO.class
-        );
+        ProductoDTO producto = rest.getForObject(inventarioUrl + "/" + idProducto, ProductoDTO.class);
 
         if (producto == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Producto no encontrado");
@@ -192,7 +177,8 @@ public class CarroService {
         }
 
         detalle.setCantidad(nuevaCantidad);
-        return detalleRepository.save(detalle);
-    }
+        detalleRepository.save(detalle);
 
+        return detalle;
+    }
 }
