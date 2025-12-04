@@ -50,7 +50,9 @@ public class CarroService {
 
         if (idCarrito != null && idCarrito > 0) {
             carrito = carroRepository.findById(idCarrito)
-                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado"));
+                    .orElseThrow(() ->
+                            new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado")
+                    );
         } else {
             carrito = new Carrito();
             carrito.setEstado("ACTIVO");
@@ -75,7 +77,6 @@ public class CarroService {
 
         descontarStock(idProducto, cantidad);
 
-        // 🔥 Muy importante → devolver carrito completo con productos
         return getCarritoId(carrito.getId());
     }
 
@@ -93,8 +94,8 @@ public class CarroService {
     public Carrito getCarritoId(int id) {
 
         Carrito carrito = carroRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "Carrito no encontrado con ID " + id));
+                .orElseThrow(() ->
+                        new ResponseStatusException(HttpStatus.NOT_FOUND, "Carrito no encontrado con ID " + id));
 
         double total = 0;
 
@@ -123,7 +124,7 @@ public class CarroService {
     }
 
     // ---------------------------------------------------------
-    // ELIMINAR PRODUCTO DEL CARRITO
+    // ELIMINAR ITEM
     // ---------------------------------------------------------
     public void deleteItem(int idCarrito, int idProducto) {
 
@@ -136,14 +137,14 @@ public class CarroService {
     }
 
     // ---------------------------------------------------------
-    // CALCULAR TOTAL
+    // TOTAL
     // ---------------------------------------------------------
     public double calcularTotalCarrito(int idCarrito) {
         return getCarritoId(idCarrito).getTotal();
     }
 
     // ---------------------------------------------------------
-    // CERRAR CARRITO
+    // CERRAR
     // ---------------------------------------------------------
     public void cerrarCarrito(int idCarrito) {
         Carrito carrito = getCarritoId(idCarrito);
@@ -177,8 +178,6 @@ public class CarroService {
         }
 
         detalle.setCantidad(nuevaCantidad);
-        detalleRepository.save(detalle);
-
-        return detalle;
+        return detalleRepository.save(detalle);
     }
 }

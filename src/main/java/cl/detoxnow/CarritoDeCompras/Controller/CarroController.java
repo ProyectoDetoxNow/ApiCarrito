@@ -13,13 +13,12 @@ import cl.detoxnow.CarritoDeCompras.Service.CarroService;
 
 @RestController
 @RequestMapping("/Api/v1/Carrito")
-@CrossOrigin("*")
 public class CarroController {
 
     @Autowired
     private CarroService carroService;
 
-    // LISTAR TODOS LOS CARRITOS
+    // LISTAR CARRITOS
     @GetMapping
     public List<Carrito> verCarrito() {
         return carroService.getAllItems();
@@ -31,18 +30,17 @@ public class CarroController {
         return carroService.getCarritoId(id);
     }
 
-    // AGREGAR PRODUCTO — permite "null" como idCarrito
+    // AGREGAR PRODUCTO (acepta "null")
     @PostMapping("/agregar/{idCarrito}/{idProducto}/{cantidad}")
     public Carrito addItem(
-            @PathVariable("idCarrito") String idCarritoRaw,
+            @PathVariable("idCarrito") String rawId,
             @PathVariable("idProducto") int idProducto,
             @PathVariable("cantidad") int cantidad) {
 
         Integer idCarrito = null;
 
-        // Si viene "null", no convierte a Integer
-        if (idCarritoRaw != null && !idCarritoRaw.equals("null")) {
-            idCarrito = Integer.parseInt(idCarritoRaw);
+        if (rawId != null && !rawId.equalsIgnoreCase("null")) {
+            idCarrito = Integer.parseInt(rawId);
         }
 
         return carroService.agregarProducto(idCarrito, idProducto, cantidad);
@@ -69,7 +67,7 @@ public class CarroController {
         return ResponseEntity.ok("Producto eliminado del carrito");
     }
 
-    // OBTENER TOTAL
+    // TOTAL
     @GetMapping("/{id}/total")
     public double obtenerTotalDelCarrito(@PathVariable("id") int id) {
         return carroService.calcularTotalCarrito(id);
