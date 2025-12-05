@@ -16,7 +16,7 @@ public class CorsConfig {
                 registry.addMapping("/**")
                         .allowedOrigins(
                                 "https://ecomerceev2-git-draft-pensive-moore-scarletjara-projects.vercel.app",
-                                "http://detoxnow.vercel.app",
+                                "https://detoxnow.vercel.app/",
                                 "http://localhost:3000"
                         )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
